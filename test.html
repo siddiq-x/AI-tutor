@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduAI Hub - Test Page</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 600px;
+        }
+        .logo {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .status {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .steps {
+            text-align: left;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        .error {
+            color: #e74c3c;
+            background: #fdf2f2;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">✨</div>
+        <h1>EduAI Hub</h1>
+        <p class="status">Development Environment Setup Required</p>
+        
+        <div class="error">
+            <strong>Issue:</strong> Node.js is not installed on your system
+        </div>
+        
+        <div class="steps">
+            <h3>Quick Setup Steps:</h3>
+            <div class="step">
+                <strong>1.</strong> Download Node.js from <a href="https://nodejs.org" target="_blank">nodejs.org</a>
+            </div>
+            <div class="step">
+                <strong>2.</strong> Install Node.js (choose LTS version)
+            </div>
+            <div class="step">
+                <strong>3.</strong> Restart your command prompt
+            </div>
+            <div class="step">
+                <strong>4.</strong> Run: <code>cd "c:\Users\siddiq\Documents\project-bolt-sb1-qvldfor6\project"</code>
+            </div>
+            <div class="step">
+                <strong>5.</strong> Run: <code>npm install</code>
+            </div>
+            <div class="step">
+                <strong>6.</strong> Run: <code>npm run dev</code>
+            </div>
+        </div>
+        
+        <p><small>This test page confirms your browser is working correctly.</small></p>
+    </div>
+</body>
+</html>

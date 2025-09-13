@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - EduAI Hub</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .debug-info {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .error {
+            background: #fee;
+            border-left: 4px solid #f00;
+        }
+        .success {
+            background: #efe;
+            border-left: 4px solid #0a0;
+        }
+        .warning {
+            background: #ffeaa7;
+            border-left: 4px solid #fdcb6e;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>EduAI Hub Debug Page</h1>
+    
+    <div class="debug-info">
+        <h2>Basic HTML Test</h2>
+        <p>✅ HTML is loading correctly</p>
+        <p>✅ CSS styles are working</p>
+    </div>
+
+    <div class="debug-info" id="js-test">
+        <h2>JavaScript Test</h2>
+        <p>⏳ Testing JavaScript...</p>
+    </div>
+
+    <div class="debug-info" id="react-test">
+        <h2>React Test</h2>
+        <div id="react-root">⏳ Testing React mounting...</div>
+    </div>
+
+    <div class="debug-info" id="console-errors">
+        <h2>Console Errors</h2>
+        <div id="error-list">No errors detected yet...</div>
+    </div>
+
+    <script>
+        // Test 1: Basic JavaScript
+        document.getElementById('js-test').innerHTML = `
+            <h2>JavaScript Test</h2>
+            <p class="success">✅ JavaScript is working</p>
+            <p>Current time: ${new Date().toLocaleString()}</p>
+        `;
+
+        // Test 2: Capture console errors
+        const originalError = console.error;
+        const errors = [];
+        
+        console.error = function(...args) {
+            errors.push(args.join(' '));
+            originalError.apply(console, args);
+            updateErrorDisplay();
+        };
+
+        function updateErrorDisplay() {
+            const errorDiv = document.getElementById('error-list');
+            if (errors.length === 0) {
+                errorDiv.innerHTML = '<p class="success">✅ No console errors</p>';
+            } else {
+                errorDiv.innerHTML = '<div class="error"><h3>❌ Console Errors:</h3><pre>' + 
+                    errors.map(e => '• ' + e).join('\n') + '</pre></div>';
+            }
+        }
+
+        // Test 3: Try to load React (simplified)
+        setTimeout(() => {
+            try {
+                // Check if we can access the main app
+                fetch('/src/main.tsx')
+                    .then(response => {
+                        if (response.ok) {
+                            document.getElementById('react-test').innerHTML = `
+                                <h2>React Test</h2>
+                                <p class="success">✅ Main TypeScript file is accessible</p>
+                                <p class="warning">⚠️ Check browser console for React errors</p>
+                            `;
+                        } else {
+                            throw new Error('Cannot access main.tsx');
+                        }
+                    })
+                    .catch(error => {
+                        document.getElementById('react-test').innerHTML = `
+                            <h2>React Test</h2>
+                            <p class="error">❌ Cannot access React files: ${error.message}</p>
+                        `;
+                    });
+            } catch (error) {
+                document.getElementById('react-test').innerHTML = `
+                    <h2>React Test</h2>
+                    <p class="error">❌ React test failed: ${error.message}</p>
+                `;
+            }
+        }, 1000);
+
+        // Test 4: Check if main app is running
+        setTimeout(() => {
+            const mainRoot = document.querySelector('#root');
+            if (mainRoot && mainRoot.children.length > 0) {
+                console.log('✅ Main React app appears to be mounted');
+            } else {
+                console.error('❌ Main React app is not mounted or root is empty');
+            }
+            updateErrorDisplay();
+        }, 2000);
+
+        // Initial error display
+        updateErrorDisplay();
+    </script>
+</body>
+</html>
