@@ -5,25 +5,23 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Archive, 
   Search, 
+  Filter, 
   Plus, 
   Trash2, 
-  Edit,
-  Save,
-  X,
+  Save, 
+  X, 
   Calendar,
-  MessageSquare,
+  Target,
   ArrowLeft,
-  Loader2,
+  Archive,
   Bot,
   FileEdit,
   UserCheck,
-  Target,
-  Filter
+  MessageSquare,
+  Edit
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoadingStateWrapper, ContentCardSkeleton } from '@/components/LoadingSkeleton';
 
@@ -64,10 +62,8 @@ export function Vault({ onBack }: VaultProps) {
   const [selectedTool, setSelectedTool] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [newPrompt, setNewPrompt] = useState('');
   const [newResponse, setNewResponse] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -82,7 +78,19 @@ export function Vault({ onBack }: VaultProps) {
     
     setIsLoading(true);
     try {
-      // Mock vault items for demo
+      // Load saved plagiarism reports from localStorage
+      const savedReports = JSON.parse(localStorage.getItem('plagiarismReports') || '[]');
+      
+      // Convert plagiarism reports to vault items
+      const plagiarismItems: VaultItem[] = savedReports.map((report: any) => ({
+        id: report.id,
+        tool: 'Plagiarism Checker',
+        prompt: `Plagiarism Check - ${report.percentage}% similarity (${report.riskLevel} risk)`,
+        response: `Content: ${report.content.substring(0, 200)}${report.content.length > 200 ? '...' : ''}\n\nAnalysis: ${report.explanation}\n\nSimilarity: ${report.percentage}%\nRisk Level: ${report.riskLevel.toUpperCase()}`,
+        created_at: report.timestamp
+      }));
+
+      // Mock vault items for demo (other tools)
       const mockItems: VaultItem[] = [
         {
           id: '1',
@@ -114,7 +122,12 @@ export function Vault({ onBack }: VaultProps) {
         }
       ];
       
-      setVaultItems(mockItems);
+      // Combine plagiarism reports with mock items and sort by date
+      const allItems = [...plagiarismItems, ...mockItems].sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      
+      setVaultItems(allItems);
     } catch (error) {
       console.error('Error loading vault items:', error);
       toast({
@@ -138,22 +151,16 @@ export function Vault({ onBack }: VaultProps) {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('vaults')
-        .insert([
-          {
-            user_id: user?.id,
-            tool: 'Manual Entry',
-            prompt: newPrompt.trim(),
-            response: newResponse.trim(),
-          }
-        ])
-        .select()
-        .single();
+      // Since we're using mock mode, just add to localStorage and state
+      const newItem: VaultItem = {
+        id: Date.now().toString(),
+        tool: 'Manual Entry',
+        prompt: newPrompt.trim(),
+        response: newResponse.trim(),
+        created_at: new Date().toISOString()
+      };
 
-      if (error) throw error;
-
-      setVaultItems(prev => [data, ...prev]);
+      setVaultItems(prev => [newItem, ...prev]);
       setNewPrompt('');
       setNewResponse('');
       setIsAdding(false);
@@ -172,17 +179,9 @@ export function Vault({ onBack }: VaultProps) {
     }
   };
 
-  const deleteVaultItem = async (id: string) => {
+  const deleteItem = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('vaults')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
       setVaultItems(prev => prev.filter(item => item.id !== id));
-      
       toast({
         title: "Deleted",
         description: "Item removed from vault",
@@ -361,7 +360,7 @@ export function Vault({ onBack }: VaultProps) {
           {/* Vault Items */}
           <LoadingStateWrapper
             isLoading={isLoading}
-            error={error}
+            error={null}
             skeleton={
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {Array.from({ length: 4 }).map((_, index) => (
@@ -369,7 +368,7 @@ export function Vault({ onBack }: VaultProps) {
                 ))}
               </div>
             }
-            onRetry={fetchVaultItems}
+            onRetry={loadVaultItems}
           >
             {filteredItems.length === 0 ? (
               <Card className="bg-white dark:bg-zinc-900 backdrop-blur-sm border-0 shadow-lg dark:shadow-white/10 transition-colors">
@@ -414,7 +413,7 @@ export function Vault({ onBack }: VaultProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setEditingId(item.id)}
+                            onClick={() => {/* Edit functionality not implemented */}}
                             className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-zinc-800"
                           >
                             <Edit className="w-3 h-3" />
@@ -422,7 +421,7 @@ export function Vault({ onBack }: VaultProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => deleteVaultItem(item.id)}
+                            onClick={() => deleteItem(item.id)}
                             className="h-8 w-8 p-0 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400"
                           >
                             <Trash2 className="w-3 h-3" />

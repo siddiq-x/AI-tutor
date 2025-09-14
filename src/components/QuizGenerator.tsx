@@ -1,29 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Progress } from '@/components/ui/progress';
 import { 
   Target, 
   Send, 
-  Clock, 
+  Loader2, 
   CheckCircle, 
-  XCircle,
-  Trophy,
+  XCircle, 
   RotateCcw,
-  ArrowRight,
   ArrowLeft,
-  Loader2,
-  BookOpen,
-  Timer,
-  Award
+  Clock,
+  Trophy,
+  Brain,
+  Zap
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { LoadingStateWrapper, ContentCardSkeleton, QuizQuestionSkeleton, ResultsSkeleton } from '@/components/LoadingSkeleton';
 
 interface QuizQuestion {
+  id: number;
   question: string;
   options: string[];
   answer: string;
@@ -31,9 +28,8 @@ interface QuizQuestion {
 }
 
 interface QuizResult {
-  questionIndex: number;
+  questionId: number;
   selectedAnswer: string;
-  correctAnswer: string;
   isCorrect: boolean;
   timeSpent: number;
 }
@@ -54,87 +50,179 @@ export function QuizGenerator({ onBack }: QuizGeneratorProps) {
   const [quizStarted, setQuizStarted] = useState(false);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [questionStartTime, setQuestionStartTime] = useState<number>(0);
-  const [totalStartTime, setTotalStartTime] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const parseQuizResponse = (response: string): QuizQuestion[] => {
-    try {
-      // Try to parse as JSON first
-      const jsonMatch = response.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+  // Dynamic quiz question generator based on topic
+  const generateTopicQuestions = (topic: string, count: number): QuizQuestion[] => {
+    const questions: QuizQuestion[] = [];
+
+    // More specific topic-based question generation
+    const getTopicSpecificQuestions = (topic: string) => {
+      const topicLower = topic.toLowerCase();
+      
+      // Biology/Life Sciences
+      if (topicLower.includes('biology') || topicLower.includes('life') || topicLower.includes('cell') || topicLower.includes('dna')) {
+        return [
+          {
+            question: `What is the basic unit of life in ${topic}?`,
+            options: ["Cell", "Atom", "Molecule", "Tissue"],
+            answer: "Cell",
+            explanation: `The cell is the fundamental unit of life and the basic building block of all living organisms.`
+          },
+          {
+            question: `Which process is essential for energy production in living organisms studying ${topic}?`,
+            options: ["Photosynthesis", "Cellular respiration", "Both A and B", "Neither A nor B"],
+            answer: "Both A and B",
+            explanation: `Both photosynthesis and cellular respiration are crucial for energy conversion in living systems.`
+          },
+          {
+            question: `What carries genetic information in ${topic}?`,
+            options: ["DNA", "RNA", "Proteins", "All of the above"],
+            answer: "All of the above",
+            explanation: `DNA stores genetic information, RNA helps express it, and proteins carry out cellular functions.`
+          }
+        ];
       }
-
-      // Fallback: Parse structured text format
-      const questions: QuizQuestion[] = [];
-      const questionBlocks = response.split(/(?=\d+\.|Question \d+)/i).filter(block => block.trim());
-
-      for (const block of questionBlocks) {
-        const lines = block.split('\n').map(line => line.trim()).filter(line => line);
-        
-        if (lines.length < 6) continue; // Need at least question + 4 options + answer
-
-        const questionLine = lines.find(line => 
-          line.match(/^\d+\./) || line.toLowerCase().includes('question')
-        );
-        
-        if (!questionLine) continue;
-
-        const question = questionLine.replace(/^\d+\.\s*/, '').replace(/^Question \d+:\s*/i, '');
-        const options: string[] = [];
-        let answer = '';
-        let explanation = '';
-
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          
-          // Extract options (A), B), C), D) or a), b), c), d)
-          if (line.match(/^[A-Da-d][\)\.]/)) {
-            options.push(line.replace(/^[A-Da-d][\)\.]\s*/, ''));
+      
+      // Physics
+      if (topicLower.includes('physics') || topicLower.includes('force') || topicLower.includes('energy') || topicLower.includes('motion')) {
+        return [
+          {
+            question: `What is Newton's first law related to ${topic}?`,
+            options: ["F = ma", "An object at rest stays at rest", "E = mc²", "P = mv"],
+            answer: "An object at rest stays at rest",
+            explanation: `Newton's first law states that an object at rest stays at rest and an object in motion stays in motion unless acted upon by an external force.`
+          },
+          {
+            question: `In ${topic}, what is the unit of force?`,
+            options: ["Newton", "Joule", "Watt", "Pascal"],
+            answer: "Newton",
+            explanation: `The Newton (N) is the SI unit of force, named after Sir Isaac Newton.`
+          },
+          {
+            question: `What type of energy is associated with motion in ${topic}?`,
+            options: ["Potential energy", "Kinetic energy", "Thermal energy", "Chemical energy"],
+            answer: "Kinetic energy",
+            explanation: `Kinetic energy is the energy possessed by an object due to its motion.`
           }
-          
-          // Extract answer
-          if (line.toLowerCase().includes('answer:') || line.toLowerCase().includes('correct:')) {
-            answer = line.split(':')[1]?.trim() || '';
-            // Extract just the letter if it's in format "Answer: A"
-            const answerMatch = answer.match(/[A-Da-d]/);
-            if (answerMatch && options.length >= 4) {
-              const answerIndex = answerMatch[0].toLowerCase().charCodeAt(0) - 97;
-              if (answerIndex >= 0 && answerIndex < options.length) {
-                answer = options[answerIndex];
-              }
-            }
-          }
-          
-          // Extract explanation
-          if (line.toLowerCase().includes('explanation:')) {
-            explanation = line.split(':').slice(1).join(':').trim();
-          }
-        }
-
-        if (question && options.length >= 4 && answer) {
-          questions.push({
-            question,
-            options: options.slice(0, 4),
-            answer,
-            explanation: explanation || 'No explanation provided.'
-          });
-        }
+        ];
       }
+      
+      // Mathematics
+      if (topicLower.includes('math') || topicLower.includes('algebra') || topicLower.includes('calculus') || topicLower.includes('geometry')) {
+        return [
+          {
+            question: `In ${topic}, what is the value of π (pi) approximately?`,
+            options: ["3.14159", "2.71828", "1.41421", "1.61803"],
+            answer: "3.14159",
+            explanation: `Pi (π) is approximately 3.14159, representing the ratio of a circle's circumference to its diameter.`
+          },
+          {
+            question: `What is the derivative of x² in ${topic}?`,
+            options: ["2x", "x²", "2", "x"],
+            answer: "2x",
+            explanation: `Using the power rule in calculus, the derivative of x² is 2x.`
+          },
+          {
+            question: `In ${topic}, what is the Pythagorean theorem?`,
+            options: ["a² + b² = c²", "a + b = c", "a² - b² = c²", "ab = c²"],
+            answer: "a² + b² = c²",
+            explanation: `The Pythagorean theorem states that in a right triangle, a² + b² = c², where c is the hypotenuse.`
+          }
+        ];
+      }
+      
+      // History
+      if (topicLower.includes('history') || topicLower.includes('war') || topicLower.includes('revolution') || topicLower.includes('ancient')) {
+        return [
+          {
+            question: `What is a primary source in ${topic}?`,
+            options: ["A textbook", "A firsthand account", "A Wikipedia article", "A documentary"],
+            answer: "A firsthand account",
+            explanation: `A primary source is an original document or firsthand account from the time period being studied.`
+          },
+          {
+            question: `Why is chronology important in studying ${topic}?`,
+            options: ["To understand cause and effect", "To memorize dates", "To pass exams", "To impress others"],
+            answer: "To understand cause and effect",
+            explanation: `Chronology helps historians understand how events influenced each other over time.`
+          },
+          {
+            question: `What method do historians use to verify facts about ${topic}?`,
+            options: ["Cross-referencing sources", "Guessing", "Using only one source", "Ignoring evidence"],
+            answer: "Cross-referencing sources",
+            explanation: `Historians verify facts by comparing multiple reliable sources and evidence.`
+          }
+        ];
+      }
+      
+      // Chemistry
+      if (topicLower.includes('chemistry') || topicLower.includes('chemical') || topicLower.includes('atom') || topicLower.includes('molecule')) {
+        return [
+          {
+            question: `What is the smallest unit of an element in ${topic}?`,
+            options: ["Atom", "Molecule", "Ion", "Compound"],
+            answer: "Atom",
+            explanation: `An atom is the smallest unit of an element that retains the chemical properties of that element.`
+          },
+          {
+            question: `In ${topic}, what determines an element's identity?`,
+            options: ["Number of protons", "Number of electrons", "Number of neutrons", "Atomic mass"],
+            answer: "Number of protons",
+            explanation: `The number of protons (atomic number) determines an element's identity and chemical properties.`
+          },
+          {
+            question: `What type of bond involves sharing electrons in ${topic}?`,
+            options: ["Ionic bond", "Covalent bond", "Metallic bond", "Hydrogen bond"],
+            answer: "Covalent bond",
+            explanation: `Covalent bonds form when atoms share electrons to achieve stable electron configurations.`
+          }
+        ];
+      }
+      
+      // Default generic questions for any topic
+      return [
+        {
+          question: `What is the most effective way to learn about ${topic}?`,
+          options: ["Active practice and application", "Passive reading only", "Memorization without understanding", "Avoiding difficult concepts"],
+          answer: "Active practice and application",
+          explanation: `Active learning through practice and real-world application is the most effective way to master ${topic}.`
+        },
+        {
+          question: `When studying ${topic}, what should you do if you don't understand a concept?`,
+          options: ["Skip it and move on", "Ask questions and seek help", "Memorize it anyway", "Give up completely"],
+          answer: "Ask questions and seek help",
+          explanation: `Asking questions and seeking help when confused is crucial for deep understanding of ${topic}.`
+        },
+        {
+          question: `What makes someone proficient in ${topic}?`,
+          options: ["Understanding fundamentals and regular practice", "Memorizing facts only", "Natural talent alone", "Avoiding challenges"],
+          answer: "Understanding fundamentals and regular practice",
+          explanation: `Proficiency in ${topic} comes from solid foundational knowledge combined with consistent practice.`
+        }
+      ];
+    };
 
-      return questions;
-    } catch (error) {
-      console.error('Error parsing quiz response:', error);
-      return [];
+    const questionPool = getTopicSpecificQuestions(topic);
+
+    // Generate the requested number of questions from the pool
+    for (let i = 0; i < count; i++) {
+      const baseQuestion = questionPool[i % questionPool.length];
+      questions.push({
+        ...baseQuestion,
+        id: i + 1
+      });
     }
+
+    return questions;
   };
 
   const generateQuiz = async () => {
     if (!topic.trim()) {
       toast({
-        title: "Please enter a topic",
-        description: "Enter a subject or topic to generate quiz questions.",
+        title: "Topic required",
+        description: "Please enter a topic for the quiz.",
         variant: "destructive",
       });
       return;
@@ -145,83 +233,15 @@ export function QuizGenerator({ onBack }: QuizGeneratorProps) {
 
     try {
       // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Generate mock quiz questions based on the topic
-      const mockQuestions: QuizQuestion[] = [];
+      // Generate dynamic mock questions based on the topic
+      const mockQuestions = generateTopicQuestions(topic, numQuestions);
       
-      for (let i = 0; i < numQuestions; i++) {
-        const questionTemplates = [
-          {
-            question: `What is a fundamental concept in ${topic}?`,
-            options: [
-              "Basic principle A",
-              "Basic principle B", 
-              "Basic principle C",
-              "Basic principle D"
-            ],
-            answer: "Basic principle A",
-            explanation: `This is the correct answer because it represents the core foundation of ${topic}.`
-          },
-          {
-            question: `Which of the following best describes ${topic}?`,
-            options: [
-              "Definition A - incorrect",
-              "Definition B - correct", 
-              "Definition C - incorrect",
-              "Definition D - incorrect"
-            ],
-            answer: "Definition B - correct",
-            explanation: `This definition accurately captures the essence of ${topic} and its key characteristics.`
-          },
-          {
-            question: `In ${topic}, what is the most important factor to consider?`,
-            options: [
-              "Factor 1",
-              "Factor 2", 
-              "Factor 3 (correct)",
-              "Factor 4"
-            ],
-            answer: "Factor 3 (correct)",
-            explanation: `Factor 3 is crucial because it directly impacts the outcomes in ${topic} applications.`
-          },
-          {
-            question: `How does ${topic} relate to real-world applications?`,
-            options: [
-              "Application method A",
-              "Application method B (best answer)", 
-              "Application method C",
-              "Application method D"
-            ],
-            answer: "Application method B (best answer)",
-            explanation: `This method is most effective because it combines theoretical knowledge with practical implementation.`
-          },
-          {
-            question: `What would be the result if you apply ${topic} principles incorrectly?`,
-            options: [
-              "Positive outcome",
-              "Negative outcome (correct)", 
-              "No change",
-              "Unpredictable result"
-            ],
-            answer: "Negative outcome (correct)",
-            explanation: `Incorrect application typically leads to negative results, which is why proper understanding is essential.`
-          }
-        ];
-
-        const template = questionTemplates[i % questionTemplates.length];
-        mockQuestions.push({
-          question: `${i + 1}. ${template.question}`,
-          options: template.options,
-          answer: template.answer,
-          explanation: template.explanation
-        });
-      }
-
       setQuestions(mockQuestions);
       toast({
         title: "Quiz generated!",
-        description: `${mockQuestions.length} questions ready. Click "Start Quiz" to begin.`,
+        description: `Generated ${mockQuestions.length} questions on ${topic}.`,
       });
 
     } catch (error) {
@@ -243,14 +263,17 @@ export function QuizGenerator({ onBack }: QuizGeneratorProps) {
     setSelectedAnswer('');
     setShowAnswer(false);
     setResults([]);
-    setTotalStartTime(Date.now());
     setQuestionStartTime(Date.now());
+  };
+
+  const selectAnswer = (answer: string) => {
+    setSelectedAnswer(answer);
   };
 
   const submitAnswer = () => {
     if (!selectedAnswer) {
       toast({
-        title: "No answer selected",
+        title: "Answer required",
         description: "Please select an answer before submitting.",
         variant: "destructive",
       });
@@ -258,13 +281,12 @@ export function QuizGenerator({ onBack }: QuizGeneratorProps) {
     }
 
     const currentQuestion = questions[currentQuestionIndex];
-    const timeSpent = Date.now() - questionStartTime;
     const isCorrect = selectedAnswer === currentQuestion.answer;
+    const timeSpent = Date.now() - questionStartTime;
 
     const result: QuizResult = {
-      questionIndex: currentQuestionIndex,
+      questionId: currentQuestion.id,
       selectedAnswer,
-      correctAnswer: currentQuestion.answer,
       isCorrect,
       timeSpent
     };
@@ -292,405 +314,298 @@ export function QuizGenerator({ onBack }: QuizGeneratorProps) {
     setResults([]);
     setQuizStarted(false);
     setQuizCompleted(false);
-    setTopic('');
+    setQuestionStartTime(0);
     setError(null);
-  };
-
-  const retryGenerate = () => {
-    setError(null);
-    generateQuiz();
-  };
-
-  const formatTime = (milliseconds: number) => {
-    const seconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    
-    if (minutes > 0) {
-      return `${minutes}m ${remainingSeconds}s`;
-    }
-    return `${remainingSeconds}s`;
   };
 
   const currentQuestion = questions[currentQuestionIndex];
   const correctAnswers = results.filter(r => r.isCorrect).length;
-  const totalTime = quizCompleted ? results.reduce((sum, r) => sum + r.timeSpent, 0) : 0;
+  const totalTime = results.reduce((sum, r) => sum + r.timeSpent, 0);
 
-  // Quiz Setup Phase
-  if (!quizStarted && questions.length === 0) {
-    return (
-      <div className="w-full min-h-screen bg-gray-100 dark:bg-black transition-colors duration-300 overflow-x-hidden box-border">
-        <div className="w-full px-4 py-8">
-          <div className="max-w-4xl mx-auto">
-            {/* Header */}
-            <div className="flex items-center gap-4 mb-8">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={onBack}
-                className="hover:bg-white/80 dark:hover:bg-zinc-800/80 text-gray-700 dark:text-gray-200 transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Dashboard
-              </Button>
-            </div>
+  // Debug logging
+  console.log('Quiz Debug:', {
+    quizStarted,
+    questionsLength: questions.length,
+    currentQuestionIndex,
+    currentQuestion,
+    hasOptions: currentQuestion?.options?.length,
+    options: currentQuestion?.options
+  });
 
-            {/* Feature Header */}
-            <div className="text-center mb-8">
-              <div className="inline-flex p-6 rounded-3xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 dark:from-green-500/20 dark:to-emerald-500/20 mb-6 transition-colors">
-                <Target className="w-12 h-12 text-green-600 dark:text-green-400 transition-colors" />
-              </div>
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4 transition-colors">AI Quiz Generator</h1>
-              <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed transition-colors">
-                Generate custom MCQ quizzes on any topic and test your knowledge with timed questions
-              </p>
-            </div>
-
-            {/* Quiz Setup */}
-            <LoadingStateWrapper
-              isLoading={isGenerating}
-              error={error}
-              skeleton={<ContentCardSkeleton />}
-              onRetry={retryGenerate}
-            >
-              <Card className="bg-white dark:bg-zinc-900 backdrop-blur-sm border-0 shadow-lg dark:shadow-white/10 transition-colors content-fade-in">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
-                    <BookOpen className="w-5 h-5" />
-                    Create Your Quiz
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div>
-                    <Label htmlFor="topic" className="text-gray-700 dark:text-gray-200">
-                      Quiz Topic
-                    </Label>
-                    <Input
-                      id="topic"
-                      placeholder="e.g. Photosynthesis, Python Loops, World War II"
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      className="mt-2 bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="num-questions" className="text-gray-700 dark:text-gray-200">
-                      Number of Questions: {numQuestions}
-                    </Label>
-                    <div className="mt-2 flex items-center gap-4">
-                      <input
-                        type="range"
-                        id="num-questions"
-                        min="1"
-                        max="10"
-                        value={numQuestions}
-                        onChange={(e) => setNumQuestions(parseInt(e.target.value))}
-                        className="flex-1 h-2 bg-gray-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer slider"
-                      />
-                      <div className="text-sm text-gray-600 dark:text-gray-300 min-w-[60px] text-center">
-                        {numQuestions} MCQs
-                      </div>
-                    </div>
-                  </div>
-
-                  <Button 
-                    onClick={generateQuiz}
-                    disabled={isGenerating || !topic.trim()}
-                    className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium py-3 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-green-500/25"
-                  >
-                    {isGenerating ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Generating Quiz...
-                      </>
-                    ) : (
-                      <>
-                        <Target className="w-4 h-4 mr-2" />
-                        Generate Quiz
-                      </>
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            </LoadingStateWrapper>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Quiz Ready to Start
-  if (!quizStarted && questions.length > 0) {
-    return (
-      <div className="w-full min-h-screen bg-gray-100 dark:bg-black transition-colors duration-300 overflow-x-hidden box-border">
-        <div className="w-full px-4 py-8">
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-8">
-              <div className="inline-flex p-6 rounded-3xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 dark:from-green-500/20 dark:to-emerald-500/20 mb-6 transition-colors">
-                <Trophy className="w-12 h-12 text-green-600 dark:text-green-400 transition-colors" />
-              </div>
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4 transition-colors">Quiz Ready!</h1>
-              <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 transition-colors">
-                {questions.length} questions on <span className="font-semibold text-green-600 dark:text-green-400">{topic}</span>
-              </p>
-            </div>
-
-            <Card className="bg-white dark:bg-zinc-900 backdrop-blur-sm border-0 shadow-lg dark:shadow-white/10 transition-colors content-fade-in">
-              <CardContent className="p-8 text-center">
-                <div className="mb-8">
-                  <div className="text-6xl font-bold text-green-600 dark:text-green-400 mb-2">{questions.length}</div>
-                  <div className="text-gray-600 dark:text-gray-300">Questions Ready</div>
-                </div>
-                
-                <div className="flex gap-4 justify-center">
-                  <Button 
-                    onClick={startQuiz}
-                    className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 py-3 rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-green-500/25"
-                  >
-                    <Timer className="w-4 h-4 mr-2" />
-                    Start Quiz
-                  </Button>
-                  
-                  <Button 
-                    variant="outline"
-                    onClick={resetQuiz}
-                    className="px-8 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-zinc-800"
-                  >
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    New Quiz
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Quiz Completed
   if (quizCompleted) {
     return (
-      <div className="w-full min-h-screen bg-gray-100 dark:bg-black transition-colors duration-300 overflow-x-hidden box-border">
-        <div className="w-full px-4 py-8">
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-8">
-              <div className="inline-flex p-6 rounded-3xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 dark:from-green-500/20 dark:to-emerald-500/20 mb-6 transition-colors">
-                <Award className="w-12 h-12 text-green-600 dark:text-green-400 transition-colors" />
+      <div className="max-w-4xl mx-auto p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <Button
+            onClick={onBack}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </Button>
+        </div>
+
+        <Card>
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <Trophy className="w-16 h-16 text-yellow-500" />
+            </div>
+            <CardTitle className="text-2xl">Quiz Complete!</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+              <div className="p-4 bg-green-50 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">{correctAnswers}</div>
+                <div className="text-sm text-green-700">Correct Answers</div>
               </div>
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4 transition-colors">Quiz Complete!</h1>
+              <div className="p-4 bg-blue-50 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">{Math.round((correctAnswers / questions.length) * 100)}%</div>
+                <div className="text-sm text-blue-700">Score</div>
+              </div>
+              <div className="p-4 bg-purple-50 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">{Math.round(totalTime / 1000)}s</div>
+                <div className="text-sm text-purple-700">Total Time</div>
+              </div>
             </div>
 
-            {/* Final Score */}
-            <Card className="bg-white dark:bg-zinc-900 backdrop-blur-sm border-0 shadow-lg dark:shadow-white/10 transition-colors mb-6 content-fade-in">
-              <CardContent className="p-8 text-center">
-                <div className="mb-6">
-                  <div className="text-6xl font-bold text-green-600 dark:text-green-400 mb-2">
-                    {correctAnswers}/{questions.length}
-                  </div>
-                  <div className="text-xl text-gray-600 dark:text-gray-300">Final Score</div>
-                  <div className="text-lg text-gray-500 dark:text-gray-400 mt-2">
-                    {Math.round((correctAnswers / questions.length) * 100)}% Correct
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">{correctAnswers}</div>
-                    <div className="text-gray-600 dark:text-gray-300">Correct</div>
-                  </div>
-                  <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
-                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">{questions.length - correctAnswers}</div>
-                    <div className="text-gray-600 dark:text-gray-300">Incorrect</div>
-                  </div>
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatTime(totalTime)}</div>
-                    <div className="text-gray-600 dark:text-gray-300">Total Time</div>
-                  </div>
-                </div>
-
-                <Button 
-                  onClick={resetQuiz}
-                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-8 py-3 rounded-xl font-medium transition-all duration-300 hover:shadow-lg hover:shadow-green-500/25"
-                >
-                  <RotateCcw className="w-4 h-4 mr-2" />
-                  Take Another Quiz
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Detailed Results */}
-            <Card className="bg-white dark:bg-zinc-900 backdrop-blur-sm border-0 shadow-lg dark:shadow-white/10 transition-colors content-fade-in">
-              <CardHeader>
-                <CardTitle className="text-gray-900 dark:text-white">Question Breakdown</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {results.map((result, index) => (
-                  <div key={index} className="p-4 rounded-lg border border-gray-200 dark:border-zinc-700">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        {result.isCorrect ? (
-                          <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                        ) : (
-                          <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                        )}
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          Question {index + 1}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                        <Clock className="w-4 h-4" />
-                        {formatTime(result.timeSpent)}
-                      </div>
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-300">
-                      <div>Your answer: <span className={result.isCorrect ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{result.selectedAnswer}</span></div>
-                      {!result.isCorrect && (
-                        <div>Correct answer: <span className="text-green-600 dark:text-green-400">{result.correctAnswer}</span></div>
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Review Your Answers</h3>
+              {questions.map((question, index) => {
+                const result = results[index];
+                return (
+                  <div key={question.id} className="p-4 border rounded-lg">
+                    <div className="flex items-start gap-3">
+                      {result.isCorrect ? (
+                        <CheckCircle className="w-5 h-5 text-green-500 mt-1" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-red-500 mt-1" />
                       )}
+                      <div className="flex-1">
+                        <p className="font-medium">{question.question}</p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Your answer: <span className={result.isCorrect ? 'text-green-600' : 'text-red-600'}>
+                            {result.selectedAnswer}
+                          </span>
+                        </p>
+                        {!result.isCorrect && (
+                          <p className="text-sm text-green-600 mt-1">
+                            Correct answer: {question.answer}
+                          </p>
+                        )}
+                        <p className="text-sm text-gray-500 mt-2">{question.explanation}</p>
+                      </div>
                     </div>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-3 justify-center">
+              <Button onClick={resetQuiz} className="flex items-center gap-2">
+                <RotateCcw className="w-4 h-4" />
+                Take Another Quiz
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
-  // Active Quiz
-  return (
-    <div className="w-full min-h-screen bg-gray-100 dark:bg-black transition-colors duration-300 overflow-x-hidden box-border">
-      <div className="w-full px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Progress Header */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-sm text-gray-600 dark:text-gray-300">
-                Question {currentQuestionIndex + 1} of {questions.length}
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                <Clock className="w-4 h-4" />
-                {formatTime(Date.now() - questionStartTime)}
-              </div>
-            </div>
-            <Progress 
-              value={((currentQuestionIndex + 1) / questions.length) * 100} 
-              className="h-2"
-            />
-          </div>
-
-          {/* Question Card */}
-          <LoadingStateWrapper
-            isLoading={false}
-            error={null}
-            skeleton={<QuizQuestionSkeleton />}
+  if (quizStarted && questions.length > 0 && currentQuestion) {
+    return (
+      <div className="max-w-4xl mx-auto p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <Button
+            onClick={resetQuiz}
+            variant="outline"
+            className="flex items-center gap-2"
           >
-            <Card className="bg-white dark:bg-zinc-900 backdrop-blur-sm border-0 shadow-lg dark:shadow-white/10 transition-colors content-fade-in">
-              <CardHeader>
-                <CardTitle className="text-xl text-gray-900 dark:text-white leading-relaxed">
-                  {currentQuestion.question}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <RadioGroup 
-                  value={selectedAnswer} 
-                  onValueChange={setSelectedAnswer}
-                  disabled={showAnswer}
-                  className="space-y-3"
-                >
-                  {currentQuestion.options.map((option, index) => {
-                    const isSelected = selectedAnswer === option;
-                    const isCorrect = option === currentQuestion.answer;
-                    
-                    let optionClass = "p-4 rounded-lg border-2 transition-all duration-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800";
-                    
-                    if (showAnswer) {
-                      if (isCorrect) {
-                        optionClass += " border-green-500 bg-green-50 dark:bg-green-900/20";
-                      } else if (isSelected && !isCorrect) {
-                        optionClass += " border-red-500 bg-red-50 dark:bg-red-900/20";
-                      } else {
-                        optionClass += " border-gray-200 dark:border-zinc-700";
-                      }
-                    } else {
-                      optionClass += isSelected 
-                        ? " border-blue-500 bg-blue-50 dark:bg-blue-900/20" 
-                        : " border-gray-200 dark:border-zinc-700";
-                    }
+            <ArrowLeft className="w-4 h-4" />
+            Back to Setup
+          </Button>
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-gray-600">
+              Question {currentQuestionIndex + 1} of {questions.length}
+            </div>
+            <Progress value={((currentQuestionIndex + 1) / questions.length) * 100} className="w-32" />
+          </div>
+        </div>
 
-                    return (
-                      <div key={index} className={optionClass}>
-                        <div className="flex items-center space-x-3">
-                          <RadioGroupItem value={option} id={`option-${index}`} />
-                          <label 
-                            htmlFor={`option-${index}`} 
-                            className="flex-1 cursor-pointer text-gray-900 dark:text-white"
-                          >
-                            {option}
-                          </label>
-                          {showAnswer && isCorrect && (
-                            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                          )}
-                          {showAnswer && isSelected && !isCorrect && (
-                            <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                          )}
-                        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="w-5 h-5" />
+              {topic} Quiz
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="p-4 bg-black rounded-lg">
+              <h3 className="text-lg font-medium mb-4 text-white">{currentQuestion.question}</h3>
+              <div className="space-y-3">
+                <div className="text-xs text-gray-500 mb-2">
+                  Debug: {currentQuestion?.options?.length || 0} options found
+                </div>
+                {currentQuestion?.options && Array.isArray(currentQuestion.options) && currentQuestion.options.length > 0 ? (
+                  currentQuestion.options.map((option, index) => (
+                    <button
+                      key={`option-${index}`}
+                      onClick={() => selectAnswer(option)}
+                      disabled={showAnswer}
+                      className={`w-full p-4 text-left rounded-lg border-2 transition-all duration-200 font-medium ${
+                        selectedAnswer === option
+                          ? showAnswer
+                            ? option === currentQuestion.answer
+                              ? 'bg-green-100 border-green-500 text-green-700 shadow-md'
+                              : 'bg-red-100 border-red-500 text-red-700 shadow-md'
+                            : 'bg-black border-black text-white shadow-md'
+                          : showAnswer && option === currentQuestion.answer
+                          ? 'bg-green-100 border-green-500 text-green-700 shadow-md'
+                          : 'bg-black border-black text-white hover:bg-gray-800 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <span className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-sm font-bold mr-3 text-black">
+                          {String.fromCharCode(65 + index)}
+                        </span>
+                        <span>{option || 'Empty option'}</span>
                       </div>
-                    );
-                  })}
-                </RadioGroup>
-
-                {showAnswer && (
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 animate-in slide-in-from-top-2 duration-300 content-fade-in">
-                    <div className="flex items-start gap-2">
-                      <BookOpen className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                      <div>
-                        <div className="font-medium text-blue-900 dark:text-blue-100 mb-1">Explanation</div>
-                        <div className="text-blue-800 dark:text-blue-200 text-sm leading-relaxed">
-                          {currentQuestion.explanation}
-                        </div>
-                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-red-500 p-4 bg-red-50 rounded-lg">
+                    <div>No options available for this question.</div>
+                    <div className="text-xs mt-2">
+                      Debug info: 
+                      <br />- Current question exists: {currentQuestion ? 'Yes' : 'No'}
+                      <br />- Options property exists: {currentQuestion?.options ? 'Yes' : 'No'}
+                      <br />- Options is array: {Array.isArray(currentQuestion?.options) ? 'Yes' : 'No'}
+                      <br />- Options length: {currentQuestion?.options?.length || 0}
+                      <br />- Options content: {JSON.stringify(currentQuestion?.options)}
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
 
-                <div className="flex gap-3">
-                  {!showAnswer ? (
-                    <Button 
-                      onClick={submitAnswer}
-                      disabled={!selectedAnswer}
-                      className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium py-3 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-green-500/25"
-                    >
-                      <Send className="w-4 h-4 mr-2" />
-                      Submit Answer
-                    </Button>
-                  ) : (
-                    <Button 
-                      onClick={nextQuestion}
-                      className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium py-3 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25"
-                    >
-                      {currentQuestionIndex < questions.length - 1 ? (
-                        <>
-                          Next Question
-                          <ArrowRight className="w-4 h-4 ml-2" />
-                        </>
-                      ) : (
-                        <>
-                          View Results
-                          <Trophy className="w-4 h-4 ml-2" />
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </LoadingStateWrapper>
-        </div>
+            {showAnswer && (
+              <div className="p-4 bg-blue-50 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2">Explanation:</h4>
+                <p className="text-blue-800">{currentQuestion.explanation}</p>
+              </div>
+            )}
+
+            <div className="flex justify-between">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Clock className="w-4 h-4" />
+                Time: {Math.round((Date.now() - questionStartTime) / 1000)}s
+              </div>
+              {!showAnswer ? (
+                <Button onClick={submitAnswer} disabled={!selectedAnswer}>
+                  Submit Answer
+                </Button>
+              ) : (
+                <Button onClick={nextQuestion}>
+                  {currentQuestionIndex < questions.length - 1 ? 'Next Question' : 'Finish Quiz'}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <Button
+          onClick={onBack}
+          variant="outline"
+          className="flex items-center gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Dashboard
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="w-5 h-5" />
+            Quiz Generator
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="topic">Quiz Topic</Label>
+              <Input
+                id="topic"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="Enter the topic for your quiz (e.g., Biology, History, Mathematics)"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="numQuestions">Number of Questions</Label>
+              <Input
+                id="numQuestions"
+                type="number"
+                min="1"
+                max="20"
+                value={numQuestions}
+                onChange={(e) => setNumQuestions(parseInt(e.target.value) || 5)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-700">{error}</p>
+            </div>
+          )}
+
+          <Button
+            onClick={generateQuiz}
+            disabled={isGenerating || !topic.trim()}
+            className="w-full flex items-center gap-2"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Generating Quiz...
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                Generate Quiz
+              </>
+            )}
+          </Button>
+
+          {questions.length > 0 && !quizStarted && (
+            <div className="space-y-4">
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-2 text-green-700">
+                  <CheckCircle className="w-5 h-5" />
+                  <span className="font-medium">Quiz Ready!</span>
+                </div>
+                <p className="text-green-600 mt-1">
+                  Generated {questions.length} questions about {topic}
+                </p>
+              </div>
+              <Button onClick={startQuiz} className="w-full flex items-center gap-2">
+                <Zap className="w-4 h-4" />
+                Start Quiz
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

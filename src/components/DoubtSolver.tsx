@@ -10,7 +10,6 @@ import {
   Send, 
   Upload, 
   Copy, 
-  Save, 
   Loader2,
   FileText,
   MessageSquare,
@@ -20,7 +19,6 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
 import { LoadingStateWrapper, ContentCardSkeleton, MessageSkeleton } from '@/components/LoadingSkeleton';
 
 interface Message {
@@ -98,22 +96,139 @@ export function DoubtSolver({ onBack }: DoubtSolverProps) {
       // Simulate AI response with realistic delay
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Generate mock AI response based on the question
-      const mockResponses = [
-        `Great question! Let me help you understand this concept better.\n\nBased on your question about "${question}", here's a detailed explanation:\n\n1. **Key Concept**: This relates to fundamental principles in the subject area.\n\n2. **Step-by-step breakdown**:\n   - First, we need to understand the basic definition\n   - Then, we can explore how it applies in practice\n   - Finally, we'll look at some examples\n\n3. **Practical Example**: Consider a real-world scenario where this concept is applied...\n\n4. **Common Mistakes**: Students often confuse this with similar concepts, so remember...\n\nWould you like me to elaborate on any specific part of this explanation?`,
+      // Generate dynamic mock AI response based on the actual question and notes
+      const generateDynamicResponse = (userQuestion: string, userNotes: string) => {
+        const questionLower = userQuestion.toLowerCase();
         
-        `Excellent question! This is a topic many students find challenging.\n\n**Understanding the Problem**:\nYour question touches on an important concept. Let me break it down:\n\n**Solution Approach**:\n1. Start by identifying the key components\n2. Apply the relevant formulas or principles\n3. Work through the steps systematically\n\n**Example**:\nLet's say we have a similar problem...\n\n**Tips for Success**:\n- Practice similar problems regularly\n- Make sure you understand the underlying theory\n- Don't hesitate to ask follow-up questions\n\nDoes this help clarify your doubt?`,
+        // Detect subject/topic based on keywords
+        let subject = 'general';
+        let subjectIcon = '📚';
         
-        `That's a thoughtful question! Let me provide a comprehensive answer.\n\n**Core Concept**:\nThe topic you're asking about is fundamental to understanding this subject.\n\n**Detailed Explanation**:\n- **Definition**: [Key definition related to your question]\n- **Applications**: This concept is used in various scenarios\n- **Related Topics**: This connects to other important concepts\n\n**Study Strategy**:\n1. Review the basic principles first\n2. Practice with simple examples\n3. Gradually work on more complex problems\n\n**Additional Resources**:\nI recommend reviewing your textbook chapter on this topic and practicing similar problems.\n\nFeel free to ask if you need clarification on any part!`
-      ];
+        if (questionLower.includes('math') || questionLower.includes('equation') || questionLower.includes('formula') || questionLower.includes('calculate') || /\d+/.test(questionLower)) {
+          subject = 'mathematics';
+          subjectIcon = '🔢';
+        } else if (questionLower.includes('physics') || questionLower.includes('force') || questionLower.includes('energy') || questionLower.includes('motion')) {
+          subject = 'physics';
+          subjectIcon = '⚡';
+        } else if (questionLower.includes('chemistry') || questionLower.includes('reaction') || questionLower.includes('element') || questionLower.includes('compound')) {
+          subject = 'chemistry';
+          subjectIcon = '🧪';
+        } else if (questionLower.includes('biology') || questionLower.includes('cell') || questionLower.includes('organism') || questionLower.includes('dna')) {
+          subject = 'biology';
+          subjectIcon = '🧬';
+        } else if (questionLower.includes('history') || questionLower.includes('war') || questionLower.includes('ancient') || questionLower.includes('century')) {
+          subject = 'history';
+          subjectIcon = '📜';
+        } else if (questionLower.includes('english') || questionLower.includes('literature') || questionLower.includes('poem') || questionLower.includes('essay')) {
+          subject = 'literature';
+          subjectIcon = '📖';
+        }
+        
+        // Extract key terms from the question
+        const keyTerms = userQuestion.split(' ').filter(word => 
+          word.length > 3 && 
+          !['what', 'how', 'why', 'when', 'where', 'which', 'that', 'this', 'with', 'from', 'they', 'have', 'been', 'will', 'would', 'could', 'should'].includes(word.toLowerCase())
+        ).slice(0, 3);
+        
+        // Check if notes contain relevant information
+        const hasRelevantNotes = userNotes.trim().length > 10;
+        const notesContext = hasRelevantNotes ? `\n\n**Based on your notes**, I can see you're studying ${subject}. ` : '';
+        
+        return `${subjectIcon} **Great question about ${subject}!**
 
-      const randomResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+**Your Question**: "${userQuestion}"
+${notesContext}
+**Detailed Answer**:
+
+${keyTerms.length > 0 ? `🔍 **Key Terms**: ${keyTerms.join(', ')}` : ''}
+
+**Explanation**:
+${subject === 'mathematics' ? 
+  `Let me break down this mathematical concept step by step:
+
+1. **Understanding the Problem**: ${userQuestion.includes('solve') ? 'This appears to be a problem-solving question' : 'This involves mathematical reasoning'}
+2. **Approach**: Start by identifying what you know and what you need to find
+3. **Method**: Apply the relevant mathematical principles or formulas
+4. **Solution Steps**: Work through systematically, checking each step
+
+**Example**: If we consider a similar problem, we would...` :
+
+subject === 'physics' ?
+  `Here's how to understand this physics concept:
+
+1. **Physical Principle**: This relates to fundamental laws of physics
+2. **Real-world Application**: You can observe this in everyday situations
+3. **Mathematical Relationship**: The underlying equations help us quantify this
+4. **Problem-solving Strategy**: Break complex problems into simpler parts
+
+**Key Insight**: Remember that physics connects mathematical relationships with physical reality.` :
+
+subject === 'chemistry' ?
+  `Let me explain this chemistry concept:
+
+1. **Chemical Principle**: This involves understanding molecular behavior
+2. **Reaction Mechanism**: Consider how atoms and molecules interact
+3. **Practical Applications**: This concept is used in real chemical processes
+4. **Safety Considerations**: Always remember proper lab procedures
+
+**Memory Tip**: Try to visualize the molecular level interactions.` :
+
+subject === 'biology' ?
+  `Here's the biological explanation:
+
+1. **Biological System**: This relates to how living organisms function
+2. **Cellular Level**: Understanding what happens at the cellular level
+3. **Evolutionary Context**: How this trait or process evolved
+4. **Health Implications**: Why this is important for organism survival
+
+**Study Tip**: Connect this concept to examples you can observe in nature.` :
+
+subject === 'history' ?
+  `Let me provide historical context:
+
+1. **Historical Background**: Understanding the time period and circumstances
+2. **Key Figures**: Important people involved in these events
+3. **Cause and Effect**: How events led to consequences
+4. **Historical Significance**: Why this matters in the broader historical narrative
+
+**Analysis Tip**: Always consider multiple perspectives on historical events.` :
+
+subject === 'literature' ?
+  `Here's the literary analysis:
+
+1. **Literary Elements**: Consider themes, symbols, and literary devices
+2. **Author's Intent**: What message was the author trying to convey?
+3. **Historical Context**: How the time period influenced the work
+4. **Personal Interpretation**: What does this mean to you as a reader?
+
+**Reading Strategy**: Look for patterns and connections throughout the text.` :
+
+  `Here's a comprehensive explanation:
+
+1. **Core Concept**: Let me break down the fundamental idea
+2. **Key Components**: The essential elements you need to understand
+3. **Practical Application**: How this applies in real situations
+4. **Common Challenges**: Areas where students typically struggle
+
+**Study Approach**: Connect new information to what you already know.`}
+
+${hasRelevantNotes ? `\n**Connection to Your Notes**: I can see from your notes that this relates to the material you're studying. The key connection is how this concept builds upon the foundation you've already established.` : ''}
+
+**Next Steps**:
+- ${subject === 'mathematics' ? 'Practice similar problems to reinforce the method' : 'Review related concepts to build connections'}
+- ${hasRelevantNotes ? 'Cross-reference this with your notes for deeper understanding' : 'Take notes on this explanation for future reference'}
+- Feel free to ask follow-up questions for clarification
+
+**Would you like me to elaborate on any specific part of this explanation?** 🤔`;
+      };
+
+      const dynamicResponse = generateDynamicResponse(question, notes);
 
       // Add AI message
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
-        content: randomResponse,
+        content: dynamicResponse,
         timestamp: new Date(),
       };
 
@@ -177,10 +292,18 @@ export function DoubtSolver({ onBack }: DoubtSolverProps) {
 
       console.log('Attempting to save to vault:', vaultData);
 
-      const { data, error } = await supabase
-        .from('vaults')
-        .insert([vaultData])
-        .select();
+      // Since we're using mock mode, just save to localStorage
+      const vaultItems = JSON.parse(localStorage.getItem('vaultItems') || '[]');
+      const newVaultItem = {
+        ...vaultData,
+        id: Date.now().toString(),
+        created_at: new Date().toISOString()
+      };
+      vaultItems.unshift(newVaultItem);
+      localStorage.setItem('vaultItems', JSON.stringify(vaultItems));
+      
+      const data = [newVaultItem];
+      const error = null;
 
       if (error) {
         console.error('Supabase error:', error);
